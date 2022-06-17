@@ -1,12 +1,30 @@
 <template>
   <div>
     <div class="container" ref="container"></div>
+    <div class="point ponint0">
+      <div class="label">1</div>
+      <div class="text">
+        Lorem ipsum dolor sit amet consectetur, adipisicing elit.
+      </div>
+    </div>
+    <div class="point ponint1">
+      <div class="label">2</div>
+      <div class="text">
+        Lorem ipsum dolor sit amet consectetur, adipisicing elit.
+      </div>
+    </div>
+    <div class="point ponint2">
+      <div class="label">3</div>
+      <div class="text">
+        Lorem ipsum dolor sit amet consectetur, adipisicing elit.
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
 import * as THREE from "three";
-import Dat from "dat.gui";
+import Stats from "stats.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
@@ -24,9 +42,12 @@ import { ref, onMounted } from "vue";
  * debug
  *
  * */
-const gui = new Dat.GUI();
+
 const container = ref(null);
-let controls = ref(null);
+let points = [];
+let state = new Stats();
+let controlsFlag = false;
+let loadFalg = false;
 
 let glows = [
   "Object_11",
@@ -69,27 +90,50 @@ function onWindowResize() {
 }
 window.addEventListener("resize", onWindowResize);
 
+const settingLayer = () => {
+  scene.traverse((ch) => {
+    if (ch.isMesh && glows.includes(ch.name)) {
+      ch.layers.set(1);
+    } else {
+      ch.layers.set(0);
+    }
+  });
+};
+
 const gltfLoader = new GLTFLoader();
 const dracoLoader = new DRACOLoader();
-let loadFalg = false;
+
 dracoLoader.setDecoderPath("/public/draco/");
 gltfLoader.setDRACOLoader(dracoLoader);
-gltfLoader.load(
-  "/models/terzo.gltf",
-  (gltf) => {
-    gltf.scene.rotation.y = Math.PI / 2;
-    scene.add(gltf.scene);
-    loadFalg = true;
-  },
-  (xh) => {
-    // console.log(xh);
-  }
-);
+gltfLoader.load("/models/terzo.gltf", (gltf) => {
+  gltf.scene.rotation.y = Math.PI / 2;
+  scene.add(gltf.scene);
+  // settingLayer();
+  loadFalg = true;
+});
+/**
+ * Points of insterest
+ * */
+const rayCaster = new THREE.Raycaster();
+const initPoints = () => {
+  points = [
+    {
+      position: new THREE.Vector3(1, 0.6, 0.98),
+      el: document.querySelector(".ponint0"),
+    },
+    {
+      position: new THREE.Vector3(-1.2, 0.9, -0.6),
+      el: document.querySelector(".ponint1"),
+    },
+    {
+      position: new THREE.Vector3(2.1, 0.33, -0.77),
+      el: document.querySelector(".ponint2"),
+    },
+  ];
+};
 
 /**
- *
  * Lights
- *
  */
 const directionalLight1 = new THREE.DirectionalLight(0xffffff, 7);
 const directionalLight2 = new THREE.DirectionalLight(0xffffff, 2);
@@ -104,7 +148,6 @@ scene.add(directionalLight1);
 scene.add(directionalLight2);
 scene.add(directionalLight3);
 // scene.add(AmbientLight);
-gui.add(directionalLight1, "intensity", 1, 25, 0.5);
 
 const renderer = new THREE.WebGLRenderer({
   antialias: true,
@@ -118,6 +161,14 @@ renderer.shadowMap.enable = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+// Setup camera controller
+let controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDaming = true;
+controls.dampingFactor = 0.2;
+controls.panSpeed = 0.5;
+controls.maxDistance = 4; // 最大缩放距离
+controls.rotateSpeed = 0.5;
 
 function darkenMaterial(obj) {
   let name = obj.name;
@@ -154,7 +205,7 @@ function initComposer() {
   // 辉光参数
   const params = {
     // 强度
-    bloomStrength: 3.79,
+    bloomStrength: 2.7,
     // 阈值
     bloomThreshold: 0.29,
     // 半径
@@ -178,7 +229,6 @@ function initComposer() {
     HalfToneParams
   );
 
-
   // 渲染通道
   const renderPass = new RenderPass(scene, camera);
   // 辉光通道
@@ -199,7 +249,6 @@ function initComposer() {
   glowComposer.renderToScreen = false;
   glowComposer.addPass(renderPass);
   glowComposer.addPass(bloomPass);
-
 
   // 最终通道
   const finalPass = new ShaderPass(
@@ -234,83 +283,6 @@ function initComposer() {
   finalComposer.addPass(finalPass);
   finalComposer.addPass(halftonePass);
 
-
-  const controller = {
-    radius: halftonePass.uniforms["radius"].value,
-    rotateR: halftonePass.uniforms["rotateR"].value / (Math.PI / 180),
-    rotateG: halftonePass.uniforms["rotateG"].value / (Math.PI / 180),
-    rotateB: halftonePass.uniforms["rotateB"].value / (Math.PI / 180),
-    scatter: halftonePass.uniforms["scatter"].value,
-    shape: halftonePass.uniforms["shape"].value,
-    greyscale: halftonePass.uniforms["greyscale"].value,
-    blending: halftonePass.uniforms["blending"].value,
-    blendingMode: halftonePass.uniforms["blendingMode"].value,
-    disable: halftonePass.uniforms["disable"].value,
-  };
-
-  function onGUIChange() {
-    // update uniforms
-    halftonePass.uniforms["radius"].value = controller.radius;
-    halftonePass.uniforms["rotateR"].value =
-      controller.rotateR * (Math.PI / 180);
-    halftonePass.uniforms["rotateG"].value =
-      controller.rotateG * (Math.PI / 180);
-    halftonePass.uniforms["rotateB"].value =
-      controller.rotateB * (Math.PI / 180);
-    halftonePass.uniforms["scatter"].value = controller.scatter;
-    halftonePass.uniforms["shape"].value = controller.shape;
-    halftonePass.uniforms["greyscale"].value = controller.greyscale;
-    halftonePass.uniforms["blending"].value = controller.blending;
-    halftonePass.uniforms["blendingMode"].value = controller.blendingMode;
-    halftonePass.uniforms["disable"].value = controller.disable;
-  }
-
-  gui
-    .add(controller, "shape", { Dot: 1, Ellipse: 2, Line: 3, Square: 4 })
-    .onChange(onGUIChange);
-  gui.add(controller, "radius", 1, 25).onChange(onGUIChange);
-  gui.add(controller, "rotateR", 0, 90).onChange(onGUIChange);
-  gui.add(controller, "rotateG", 0, 90).onChange(onGUIChange);
-  gui.add(controller, "rotateB", 0, 90).onChange(onGUIChange);
-  gui.add(controller, "scatter", 0, 1, 0.01).onChange(onGUIChange);
-  gui.add(controller, "greyscale").onChange(onGUIChange);
-  gui.add(controller, "blending", 0, 1, 0.01).onChange(onGUIChange);
-  gui
-    .add(controller, "blendingMode", {
-      Linear: 1,
-      Multiply: 2,
-      Add: 3,
-      Lighter: 4,
-      Darker: 5,
-    })
-    .onChange(onGUIChange);
-  gui.add(controller, "disable").onChange(onGUIChange);
-
-  gui
-    .add(params, "bloomThreshold", 0.0, 1.0)
-    .step(0.01)
-    .name("阈值")
-    .onChange(function (value) {
-      bloomPass.threshold = Number(value);
-    });
-
-  // 强度 在0-10之间可正常看到物体，超过10会因光线过强而看不见物体，步长建议0.01
-  gui
-    .add(params, "bloomStrength", 0, 10)
-    .step(0.01)
-    .name("强度")
-    .onChange(function (value) {
-      bloomPass.strength = Number(value);
-    });
-
-  gui
-    .add(params, "bloomRadius", 0.0, 1.0)
-    .step(0.01)
-    .name("半径")
-    .onChange(function (value) {
-      bloomPass.radius = Number(value);
-    });
-
   return { finalComposer, glowComposer };
 }
 
@@ -323,9 +295,35 @@ if (!renderer.capabilities.isWebGL2) {
 
 // animate
 const render = () => {
+  state.update();
   if (loadFalg) {
     const elapsedTime = clock.getElapsedTime();
+    for (const point of points) {
+      const screenPosition = point.position.clone();
+      screenPosition.project(camera);
 
+      const translateX = screenPosition.x * window.innerWidth * 0.5;
+      const translateY = -screenPosition.y * window.innerHeight * 0.5;
+
+      point.el.style.transform = `translateX(${translateX}px) translateY(${translateY}px)`;
+      if (!controlsFlag) {
+        rayCaster.setFromCamera(screenPosition, camera);
+        const instersects = rayCaster.intersectObjects(scene.children, true);
+        if (instersects.length === 0) {
+          point.el.classList.add("visible");
+        } else {
+          const instersectsDistance = instersects[0].distance;
+          const pointDistance = point.position.distanceTo(camera.position);
+          if (instersectsDistance < pointDistance) {
+            point.el.classList.remove("visible");
+          } else {
+            point.el.classList.add("visible");
+          }
+        }
+      } else {
+        point.el.classList.remove("visible");
+      }
+    }
     renderer.render(scene, camera);
     // 不辉光的先变黑
     scene.traverse(darkenMaterial);
@@ -342,23 +340,66 @@ const render = () => {
   requestAnimationFrame(render);
 };
 onMounted(() => {
-  // Setup camera controller
-  controls = new OrbitControls(camera, container.value);
-  controls.enableDaming = true;
-  controls.dampingFactor = 110;
+  initPoints();
+  document.body.appendChild(state.dom);
+  container.value.addEventListener("mousedown", () => {
+    controlsFlag = true;
+  });
+  container.value.addEventListener("mouseup", () => {
+    controlsFlag = false;
+  });
   container.value.appendChild(renderer.domElement);
   render();
 });
 </script>
 
 <style lang="less">
-* {
-  margin: 0px;
-  padding: 0px;
-}
-
 .container {
   height: 100vh;
   width: 100vw;
+}
+.point {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  color: #ffffff;
+  font-family: Helvetica, Arial, sans-serif;
+  font-weight: 100;
+  font-size: 12px;
+
+  .label {
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    width: 20px;
+    height: 20px;
+    background: #00000077;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 20px;
+    cursor: help;
+    transform: scale(0, 0);
+    transition: transform 0.3s;
+  }
+  .text {
+    opacity: 0;
+    position: absolute;
+    top: 20px;
+    left: -90px;
+    padding: 10px;
+    border-radius: 4px;
+    width: 160px;
+    background: #00000077;
+    line-height: 1.3em;
+    text-align: center;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  &:hover .text {
+    opacity: 1;
+  }
+  &.visible .label {
+    transform: scale(1.1);
+  }
 }
 </style>
