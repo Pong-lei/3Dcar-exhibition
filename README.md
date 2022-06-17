@@ -1,5 +1,5 @@
 # lamborghini
-
+![](./src/assets/Lamborghini.png)
 ## Project setup
 ```
 yarn install
